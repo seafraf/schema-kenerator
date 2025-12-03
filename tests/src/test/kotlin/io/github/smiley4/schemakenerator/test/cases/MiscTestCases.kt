@@ -25,12 +25,14 @@ import io.github.smiley4.schemakenerator.validation.swagger.ValidationSwaggerSte
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonClassDiscriminator
 import kotlinx.serialization.json.JsonNamingStrategy
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.contextual
@@ -1538,12 +1540,107 @@ object MiscTestCases {
             """.trimIndent()
     }
 
+    val multipleConflictingSerialNames = case(
+        "misc",
+        "matching serial names on subclasses"
+    ) {
+        type = typeOf<ClassWithConflictingSerialNames>()
+        postGenerateSwaggerSchema = {
+            this
+                .handleCoreAnnotations()
+                .mergePropertyAttributesIntoType()
+        }
+        expectedSwaggerInline = """
+            {
+              "schemas" : {
+                "_root" : {
+                  "type" : "object",
+                  "properties" : {
+                    "a" : {
+                      "anyOf" : [ {
+                        "type" : "object",
+                        "properties" : {
+                          "unique1" : {
+                            "type" : "string"
+                          }
+                        },
+                        "required" : [ "unique1" ]
+                      }, {
+                        "type" : "object",
+                        "properties" : {
+                          "unique2" : {
+                            "type" : "string"
+                          }
+                        },
+                        "required" : [ "unique2" ]
+                      } ]
+                    },
+                    "b" : {
+                      "anyOf" : [ {
+                        "type" : "object",
+                        "properties" : {
+                          "unique3" : {
+                            "type" : "string"
+                          }
+                        },
+                        "required" : [ "unique3" ]
+                      }, {
+                        "type" : "object",
+                        "properties" : {
+                          "unique4" : {
+                            "type" : "string"
+                          }
+                        },
+                        "required" : [ "unique4" ]
+                      } ]
+                    }
+                  },
+                  "required" : [ "a", "b" ]
+                }
+              }
+            }
+            """.trimIndent()
+    }
+
 
     @Serializable
     class TestClassWithPropertyDescription(
         @Description("description on property") val someProp: TestClassWithDescription
     )
 
+    @Serializable
+    @JsonClassDiscriminator("type")
+    sealed class ClassA {
+        @Serializable
+        @SerialName("A")
+        @Suppress("unused")
+        data class SubclassA(val unique1: String) : ClassA()
+
+        @Serializable
+        @SerialName("B")
+        @Suppress("unused")
+        data class SubclassB(val unique2: String) : ClassA()
+    }
+
+    @Serializable
+    @JsonClassDiscriminator("type")
+    sealed class ClassB {
+        @Serializable
+        @SerialName("A")
+        @Suppress("unused")
+        data class SubclassA(val unique3: String) : ClassB()
+
+        @Serializable
+        @SerialName("B")
+        @Suppress("unused")
+        data class SubclassB(val unique4: String) : ClassB()
+    }
+
+    @Serializable
+    data class ClassWithConflictingSerialNames(
+        val a: ClassA,
+        val b: ClassB
+    )
 
     @Serializable
     @Description("description on class")
@@ -1562,5 +1659,4 @@ object MiscTestCases {
         override fun deserialize(decoder: Decoder): UUID = UUID.fromString(decoder.decodeString())
         override fun serialize(encoder: Encoder, value: UUID) = encoder.encodeString(value.toString())
     }
-
 }
